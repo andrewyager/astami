@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "astami"
-version = "1.0.0"
+version = "1.0.1"
 description = "Modern async/sync Asterisk Manager Interface (AMI) client for Python 3.10+"
 readme = "README.md"
 license = "MIT"
