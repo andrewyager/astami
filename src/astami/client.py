@@ -12,7 +12,9 @@ import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
+
+T = TypeVar("T")
 
 if TYPE_CHECKING:
     pass
@@ -662,13 +664,13 @@ class AMIClient:
         exc_val: BaseException | None,
         exc_tb: Any,
     ) -> None:
-        if self._async_client and self._async_client._authenticated:
+        if self._loop and self._async_client and self._async_client._authenticated:
             try:
-                self._loop.run_until_complete(self._async_client.logoff())  # type: ignore[union-attr]
+                self._loop.run_until_complete(self._async_client.logoff())
             except Exception:
                 pass
-        if self._async_client:
-            self._loop.run_until_complete(self._async_client.disconnect())  # type: ignore[union-attr]
+        if self._loop and self._async_client:
+            self._loop.run_until_complete(self._async_client.disconnect())
         if self._loop:
             self._loop.close()
             self._loop = None
@@ -683,7 +685,14 @@ class AMIClient:
         """Return True if authenticated with the AMI server."""
         return self._async_client.authenticated if self._async_client else False
 
-    def _run(self, coro: Any) -> Any:
+    @property
+    def _client(self) -> AsyncAMIClient:
+        """Return the async client, raising if not connected."""
+        if self._async_client is None:
+            raise AMIError("Client not connected - use as context manager")
+        return self._async_client
+
+    def _run(self, coro: Awaitable[T]) -> T:
         """Run a coroutine in the event loop."""
         if not self._loop or not self._async_client:
             raise AMIError("Client not connected - use as context manager")
@@ -699,7 +708,7 @@ class AMIClient:
 
         See AsyncAMIClient.send_action for full documentation.
         """
-        return self._run(self._async_client.send_action(action, callback))  # type: ignore[union-attr]
+        return self._run(self._client.send_action(action, callback))
 
     def command(self, command: str) -> AMIResponse:
         """
@@ -707,7 +716,7 @@ class AMIClient:
 
         See AsyncAMIClient.command for full documentation.
         """
-        return self._run(self._async_client.command(command))  # type: ignore[union-attr]
+        return self._run(self._client.command(command))
 
     def database_put(self, family: str, key: str, value: str) -> AMIResponse:
         """
@@ -715,7 +724,7 @@ class AMIClient:
 
         See AsyncAMIClient.database_put for full documentation.
         """
-        return self._run(self._async_client.database_put(family, key, value))  # type: ignore[union-attr]
+        return self._run(self._client.database_put(family, key, value))
 
     def database_get(self, family: str, key: str) -> AMIResponse:
         """
@@ -723,7 +732,7 @@ class AMIClient:
 
         See AsyncAMIClient.database_get for full documentation.
         """
-        return self._run(self._async_client.database_get(family, key))  # type: ignore[union-attr]
+        return self._run(self._client.database_get(family, key))
 
     def database_del(self, family: str, key: str) -> AMIResponse:
         """
@@ -731,7 +740,7 @@ class AMIClient:
 
         See AsyncAMIClient.database_del for full documentation.
         """
-        return self._run(self._async_client.database_del(family, key))  # type: ignore[union-attr]
+        return self._run(self._client.database_del(family, key))
 
     def database_deltree(self, family: str, key: str = "") -> AMIResponse:
         """
@@ -739,7 +748,7 @@ class AMIClient:
 
         See AsyncAMIClient.database_deltree for full documentation.
         """
-        return self._run(self._async_client.database_deltree(family, key))  # type: ignore[union-attr]
+        return self._run(self._client.database_deltree(family, key))
 
     def originate(
         self,
@@ -761,7 +770,7 @@ class AMIClient:
         See AsyncAMIClient.originate for full documentation.
         """
         return self._run(
-            self._async_client.originate(  # type: ignore[union-attr]
+            self._client.originate(
                 channel=channel,
                 context=context,
                 exten=exten,
@@ -782,7 +791,7 @@ class AMIClient:
 
         See AsyncAMIClient.reload for full documentation.
         """
-        return self._run(self._async_client.reload(module))  # type: ignore[union-attr]
+        return self._run(self._client.reload(module))
 
     def ping(self) -> AMIResponse:
         """
@@ -790,7 +799,7 @@ class AMIClient:
 
         See AsyncAMIClient.ping for full documentation.
         """
-        return self._run(self._async_client.ping())  # type: ignore[union-attr]
+        return self._run(self._client.ping())
 
     def get_var(self, channel: str, variable: str) -> AMIResponse:
         """
@@ -798,7 +807,7 @@ class AMIClient:
 
         See AsyncAMIClient.get_var for full documentation.
         """
-        return self._run(self._async_client.get_var(channel, variable))  # type: ignore[union-attr]
+        return self._run(self._client.get_var(channel, variable))
 
     def set_var(self, channel: str, variable: str, value: str) -> AMIResponse:
         """
@@ -806,7 +815,7 @@ class AMIClient:
 
         See AsyncAMIClient.set_var for full documentation.
         """
-        return self._run(self._async_client.set_var(channel, variable, value))  # type: ignore[union-attr]
+        return self._run(self._client.set_var(channel, variable, value))
 
     def hangup(self, channel: str, cause: int | None = None) -> AMIResponse:
         """
@@ -814,7 +823,7 @@ class AMIClient:
 
         See AsyncAMIClient.hangup for full documentation.
         """
-        return self._run(self._async_client.hangup(channel, cause))  # type: ignore[union-attr]
+        return self._run(self._client.hangup(channel, cause))
 
     def redirect(
         self,
@@ -828,7 +837,7 @@ class AMIClient:
 
         See AsyncAMIClient.redirect for full documentation.
         """
-        return self._run(self._async_client.redirect(channel, context, exten, priority))  # type: ignore[union-attr]
+        return self._run(self._client.redirect(channel, context, exten, priority))
 
     def logoff(self) -> AMIResponse:
         """
@@ -836,4 +845,4 @@ class AMIClient:
 
         See AsyncAMIClient.logoff for full documentation.
         """
-        return self._run(self._async_client.logoff())  # type: ignore[union-attr]
+        return self._run(self._client.logoff())
