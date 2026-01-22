@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     pass
@@ -317,9 +318,7 @@ class AsyncAMIClient:
         Returns:
             AMIResponse from the command
         """
-        return await self.send_action(
-            {"Action": "DBGet", "Family": family, "Key": key}
-        )
+        return await self.send_action({"Action": "DBGet", "Family": family, "Key": key})
 
     async def database_del(self, family: str, key: str) -> AMIResponse:
         """
@@ -481,7 +480,12 @@ class AsyncAMIClient:
             AMIResponse from the setvar action
         """
         return await self.send_action(
-            {"Action": "Setvar", "Channel": channel, "Variable": variable, "Value": value}
+            {
+                "Action": "Setvar",
+                "Channel": channel,
+                "Variable": variable,
+                "Value": value,
+            }
         )
 
     async def hangup(self, channel: str, cause: int | None = None) -> AMIResponse:
@@ -519,13 +523,15 @@ class AsyncAMIClient:
         Returns:
             AMIResponse from the redirect action
         """
-        return await self.send_action({
-            "Action": "Redirect",
-            "Channel": channel,
-            "Context": context,
-            "Exten": exten,
-            "Priority": str(priority),
-        })
+        return await self.send_action(
+            {
+                "Action": "Redirect",
+                "Channel": channel,
+                "Context": context,
+                "Exten": exten,
+                "Priority": str(priority),
+            }
+        )
 
     def _build_message(self, action: dict[str, Any]) -> str:
         """Build an AMI message from a dictionary."""

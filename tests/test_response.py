@@ -1,6 +1,5 @@
 """Tests for AMIResponse parsing."""
 
-import pytest
 from astami import AMIResponse
 
 
@@ -9,7 +8,10 @@ class TestAMIResponse:
 
     def test_parse_success_response(self):
         """Test parsing a successful response."""
-        raw = "Response: Success\r\nActionID: 123\r\nMessage: Authentication accepted\r\n\r\n"
+        raw = (
+            "Response: Success\r\nActionID: 123\r\n"
+            "Message: Authentication accepted\r\n\r\n"
+        )
         response = AMIResponse.from_raw(raw)
 
         assert response.success is True
@@ -19,7 +21,9 @@ class TestAMIResponse:
 
     def test_parse_error_response(self):
         """Test parsing an error response."""
-        raw = "Response: Error\r\nActionID: 456\r\nMessage: Authentication failed\r\n\r\n"
+        raw = (
+            "Response: Error\r\nActionID: 456\r\nMessage: Authentication failed\r\n\r\n"
+        )
         response = AMIResponse.from_raw(raw)
 
         assert response.success is False
