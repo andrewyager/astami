@@ -110,6 +110,9 @@ class AsyncAMIClient:
         username: AMI username
         secret: AMI password/secret
         timeout: Connection and read timeout in seconds (default: 10.0)
+        retries: Number of retry attempts on connection failure (default: 0)
+        retry_delay: Initial delay in seconds between retries; doubles each
+            attempt (exponential backoff). Default: 1.0
     """
 
     def __init__(
@@ -119,12 +122,16 @@ class AsyncAMIClient:
         username: str = "",
         secret: str = "",
         timeout: float = 10.0,
+        retries: int = 0,
+        retry_delay: float = 1.0,
     ) -> None:
         self.host = host
         self.port = port
         self.username = username
         self.secret = secret
         self.timeout = timeout
+        self.retries = retries
+        self.retry_delay = retry_delay
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._connected = False
@@ -162,24 +169,40 @@ class AsyncAMIClient:
         """
         Establish TCP connection to AMI server.
 
+        If retries > 0, connection failures (OSError, TimeoutError) are
+        retried with exponential backoff: retry_delay * 2^attempt seconds.
+
         Raises:
-            AMIError: If connection fails or times out
+            AMIError: If connection fails after all retry attempts
         """
         if self._connected:
             return
 
-        try:
-            self._reader, self._writer = await asyncio.wait_for(
-                asyncio.open_connection(self.host, self.port),
-                timeout=self.timeout,
-            )
-            # Read the initial banner (e.g., "Asterisk Call Manager/6.0.0")
-            await self._read_until(EOL)
-            self._connected = True
-        except asyncio.TimeoutError:
-            raise AMIError(f"Connection timeout to {self.host}:{self.port}")
-        except OSError as e:
-            raise AMIError(f"Failed to connect to {self.host}:{self.port}: {e}")
+        last_error: Exception | None = None
+
+        for attempt in range(1 + self.retries):
+            try:
+                self._reader, self._writer = await asyncio.wait_for(
+                    asyncio.open_connection(self.host, self.port),
+                    timeout=self.timeout,
+                )
+                # Read the initial banner (e.g., "Asterisk Call Manager/6.0.0")
+                await self._read_until(EOL)
+                self._connected = True
+                return
+            except asyncio.TimeoutError:
+                last_error = AMIError(f"Connection timeout to {self.host}:{self.port}")
+            except OSError as e:
+                last_error = AMIError(
+                    f"Failed to connect to {self.host}:{self.port}: {e}"
+                )
+
+            # If we have retries remaining, sleep with exponential backoff
+            if attempt < self.retries:
+                delay = self.retry_delay * (2**attempt)
+                await asyncio.sleep(delay)
+
+        raise last_error  # type: ignore[misc]
 
     async def disconnect(self) -> None:
         """Close the connection to the AMI server."""
