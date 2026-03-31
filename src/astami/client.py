@@ -169,6 +169,17 @@ class AsyncAMIClient:
         """Return True if authenticated with the AMI server."""
         return self._authenticated
 
+    async def _cleanup_partial_connection(self) -> None:
+        """Clean up a partially established connection."""
+        if self._writer:
+            try:
+                self._writer.close()
+                await self._writer.wait_closed()
+            except Exception:
+                pass
+        self._writer = None
+        self._reader = None
+
     async def connect(self) -> None:
         """
         Establish TCP connection to AMI server.
@@ -182,7 +193,9 @@ class AsyncAMIClient:
         if self._connected:
             return
 
-        last_error: Exception | None = None
+        last_error: AMIError = AMIError(
+            f"Failed to connect to {self.host}:{self.port}"
+        )
 
         for attempt in range(1 + self.retries):
             try:
@@ -227,17 +240,6 @@ class AsyncAMIClient:
             self._reader = None
         self._connected = False
         self._authenticated = False
-
-    async def _cleanup_partial_connection(self) -> None:
-        """Clean up a partially established connection."""
-        if self._writer:
-            try:
-                self._writer.close()
-                await self._writer.wait_closed()
-            except Exception:
-                pass
-        self._writer = None
-        self._reader = None
 
     async def login(self) -> AMIResponse:
         """
