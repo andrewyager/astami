@@ -1,7 +1,7 @@
 """Tests for connection retry behaviour."""
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -203,7 +203,7 @@ class TestAsyncRetryConnect:
         )
         call_count = 0
         mock_writer_first = AsyncMock(spec=asyncio.StreamWriter)
-        mock_writer_first.close = AsyncMock()
+        mock_writer_first.close = MagicMock()
         mock_writer_first.wait_closed = AsyncMock(return_value=None)
 
         async def partial_then_succeed(*args, **kwargs):
@@ -211,7 +211,9 @@ class TestAsyncRetryConnect:
             call_count += 1
             reader = AsyncMock(spec=asyncio.StreamReader)
             writer = (
-                mock_writer_first if call_count == 1 else AsyncMock(spec=asyncio.StreamWriter)
+                mock_writer_first
+                if call_count == 1
+                else AsyncMock(spec=asyncio.StreamWriter)
             )
             if call_count == 1:
                 reader.readuntil = AsyncMock(side_effect=asyncio.TimeoutError())
@@ -223,7 +225,9 @@ class TestAsyncRetryConnect:
                 writer.wait_closed = AsyncMock(return_value=None)
             return reader, writer
 
-        with patch("astami.client.asyncio.open_connection", side_effect=partial_then_succeed):
+        with patch(
+            "astami.client.asyncio.open_connection", side_effect=partial_then_succeed
+        ):
             await client.connect()
 
         assert client.connected is True
@@ -263,8 +267,12 @@ class TestSyncRetryConnect:
             retry_delay=0.5,
         )
 
-        with patch.object(AsyncAMIClient, "connect", new_callable=AsyncMock) as mock_connect, \
-             patch.object(AsyncAMIClient, "login", new_callable=AsyncMock) as mock_login:
+        with (
+            patch.object(
+                AsyncAMIClient, "connect", new_callable=AsyncMock
+            ) as mock_connect,
+            patch.object(AsyncAMIClient, "login", new_callable=AsyncMock) as mock_login,
+        ):
             entered = client.__enter__()
             assert client._async_client.retries == 2
             assert client._async_client.retry_delay == 0.5

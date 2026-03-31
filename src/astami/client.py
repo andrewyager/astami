@@ -12,12 +12,9 @@ import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar("T")
-
-if TYPE_CHECKING:
-    pass
 
 EOL = "\r\n"
 EOM = EOL + EOL  # End of message
@@ -193,9 +190,7 @@ class AsyncAMIClient:
         if self._connected:
             return
 
-        last_error: AMIError = AMIError(
-            f"Failed to connect to {self.host}:{self.port}"
-        )
+        last_error: AMIError = AMIError(f"Failed to connect to {self.host}:{self.port}")
 
         for attempt in range(1 + self.retries):
             try:
@@ -221,23 +216,16 @@ class AsyncAMIClient:
                     f"Failed to connect to {self.host}:{self.port}: banner read failed"
                 )
 
-            # If we have retries remaining, sleep with exponential backoff
+            # If we have retries remaining, sleep with exponential backoff (capped at 60s)
             if attempt < self.retries:
-                delay = self.retry_delay * (2**attempt)
+                delay = min(self.retry_delay * (2**attempt), 60.0)
                 await asyncio.sleep(delay)
 
         raise last_error
 
     async def disconnect(self) -> None:
         """Close the connection to the AMI server."""
-        if self._writer:
-            try:
-                self._writer.close()
-                await self._writer.wait_closed()
-            except Exception:
-                pass
-            self._writer = None
-            self._reader = None
+        await self._cleanup_partial_connection()
         self._connected = False
         self._authenticated = False
 
