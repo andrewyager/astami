@@ -125,6 +125,10 @@ class AsyncAMIClient:
         retries: int = 0,
         retry_delay: float = 1.0,
     ) -> None:
+        if retries < 0:
+            raise ValueError("retries must be >= 0")
+        if retry_delay < 0:
+            raise ValueError("retry_delay must be >= 0")
         self.host = host
         self.port = port
         self.username = username
@@ -191,10 +195,17 @@ class AsyncAMIClient:
                 self._connected = True
                 return
             except asyncio.TimeoutError:
+                await self._cleanup_partial_connection()
                 last_error = AMIError(f"Connection timeout to {self.host}:{self.port}")
             except OSError as e:
+                await self._cleanup_partial_connection()
                 last_error = AMIError(
                     f"Failed to connect to {self.host}:{self.port}: {e}"
+                )
+            except AMIError:
+                await self._cleanup_partial_connection()
+                last_error = AMIError(
+                    f"Failed to connect to {self.host}:{self.port}: banner read failed"
                 )
 
             # If we have retries remaining, sleep with exponential backoff
@@ -202,7 +213,7 @@ class AsyncAMIClient:
                 delay = self.retry_delay * (2**attempt)
                 await asyncio.sleep(delay)
 
-        raise last_error  # type: ignore[misc]
+        raise last_error
 
     async def disconnect(self) -> None:
         """Close the connection to the AMI server."""
@@ -216,6 +227,17 @@ class AsyncAMIClient:
             self._reader = None
         self._connected = False
         self._authenticated = False
+
+    async def _cleanup_partial_connection(self) -> None:
+        """Clean up a partially established connection."""
+        if self._writer:
+            try:
+                self._writer.close()
+                await self._writer.wait_closed()
+            except Exception:
+                pass
+        self._writer = None
+        self._reader = None
 
     async def login(self) -> AMIResponse:
         """

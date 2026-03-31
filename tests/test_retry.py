@@ -166,3 +166,65 @@ class TestAsyncRetryConnect:
                 await client.connect()
 
         assert call_count == 1  # No retries
+
+    def test_negative_retries_raises_value_error(self):
+        """Negative retries value is rejected at construction time."""
+        with pytest.raises(ValueError, match="retries must be >= 0"):
+            AsyncAMIClient(
+                host="localhost",
+                port=5038,
+                username="u",
+                secret="s",
+                retries=-1,
+            )
+
+    def test_negative_retry_delay_raises_value_error(self):
+        """Negative retry_delay value is rejected at construction time."""
+        with pytest.raises(ValueError, match="retry_delay must be >= 0"):
+            AsyncAMIClient(
+                host="localhost",
+                port=5038,
+                username="u",
+                secret="s",
+                retry_delay=-1.0,
+            )
+
+    @pytest.mark.asyncio
+    async def test_partial_connect_cleanup_on_retry(self):
+        """Writer is closed if open_connection succeeds but banner read fails."""
+        client = AsyncAMIClient(
+            host="localhost",
+            port=5038,
+            username="u",
+            secret="s",
+            timeout=1.0,
+            retries=1,
+            retry_delay=0.01,
+        )
+        call_count = 0
+        mock_writer_first = AsyncMock(spec=asyncio.StreamWriter)
+        mock_writer_first.close = AsyncMock()
+        mock_writer_first.wait_closed = AsyncMock(return_value=None)
+
+        async def partial_then_succeed(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            reader = AsyncMock(spec=asyncio.StreamReader)
+            writer = (
+                mock_writer_first if call_count == 1 else AsyncMock(spec=asyncio.StreamWriter)
+            )
+            if call_count == 1:
+                reader.readuntil = AsyncMock(side_effect=asyncio.TimeoutError())
+            else:
+                reader.readuntil = AsyncMock(
+                    return_value=b"Asterisk Call Manager/6.0.0\r\n"
+                )
+                writer.close = AsyncMock()
+                writer.wait_closed = AsyncMock(return_value=None)
+            return reader, writer
+
+        with patch("astami.client.asyncio.open_connection", side_effect=partial_then_succeed):
+            await client.connect()
+
+        assert client.connected is True
+        mock_writer_first.close.assert_called_once()
