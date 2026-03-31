@@ -674,6 +674,9 @@ class AMIClient:
         username: AMI username
         secret: AMI password/secret
         timeout: Connection and read timeout in seconds (default: 10.0)
+        retries: Number of retry attempts on connection failure (default: 0)
+        retry_delay: Initial delay in seconds between retries; doubles each
+            attempt (exponential backoff). Default: 1.0
     """
 
     def __init__(
@@ -683,12 +686,16 @@ class AMIClient:
         username: str = "",
         secret: str = "",
         timeout: float = 10.0,
+        retries: int = 0,
+        retry_delay: float = 1.0,
     ) -> None:
         self.host = host
         self.port = port
         self.username = username
         self.secret = secret
         self.timeout = timeout
+        self.retries = retries
+        self.retry_delay = retry_delay
         self._async_client: AsyncAMIClient | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -700,6 +707,8 @@ class AMIClient:
             username=self.username,
             secret=self.secret,
             timeout=self.timeout,
+            retries=self.retries,
+            retry_delay=self.retry_delay,
         )
         self._loop.run_until_complete(self._async_client.connect())
         self._loop.run_until_complete(self._async_client.login())

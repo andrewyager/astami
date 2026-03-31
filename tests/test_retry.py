@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from astami import AMIError, AsyncAMIClient
+from astami import AMIClient, AMIError, AsyncAMIClient
 
 
 class TestAsyncRetryConnect:
@@ -228,3 +228,44 @@ class TestAsyncRetryConnect:
 
         assert client.connected is True
         mock_writer_first.close.assert_called_once()
+
+
+class TestSyncRetryConnect:
+    """Test AMIClient (sync) passes retry params to async client."""
+
+    def test_sync_client_accepts_retry_params(self):
+        """AMIClient constructor accepts retries and retry_delay."""
+        client = AMIClient(
+            host="localhost",
+            port=5038,
+            username="u",
+            secret="s",
+            retries=3,
+            retry_delay=2.0,
+        )
+        assert client.retries == 3
+        assert client.retry_delay == 2.0
+
+    def test_sync_client_default_no_retry(self):
+        """AMIClient defaults to retries=0 (backwards compatible)."""
+        client = AMIClient(host="localhost", port=5038, username="u", secret="s")
+        assert client.retries == 0
+        assert client.retry_delay == 1.0
+
+    def test_sync_client_passes_retry_to_async(self):
+        """AMIClient.__enter__ passes retry params to AsyncAMIClient."""
+        client = AMIClient(
+            host="localhost",
+            port=5038,
+            username="u",
+            secret="s",
+            retries=2,
+            retry_delay=0.5,
+        )
+
+        with patch.object(AsyncAMIClient, "connect", new_callable=AsyncMock) as mock_connect, \
+             patch.object(AsyncAMIClient, "login", new_callable=AsyncMock) as mock_login:
+            entered = client.__enter__()
+            assert client._async_client.retries == 2
+            assert client._async_client.retry_delay == 0.5
+            client.__exit__(None, None, None)
