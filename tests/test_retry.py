@@ -268,12 +268,10 @@ class TestSyncRetryConnect:
         )
 
         with (
-            patch.object(
-                AsyncAMIClient, "connect", new_callable=AsyncMock
-            ) as mock_connect,
-            patch.object(AsyncAMIClient, "login", new_callable=AsyncMock) as mock_login,
+            patch.object(AsyncAMIClient, "connect", new_callable=AsyncMock),
+            patch.object(AsyncAMIClient, "login", new_callable=AsyncMock),
         ):
-            entered = client.__enter__()
+            client.__enter__()
             assert client._async_client.retries == 2
             assert client._async_client.retry_delay == 0.5
             client.__exit__(None, None, None)

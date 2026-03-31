@@ -216,7 +216,7 @@ class AsyncAMIClient:
                     f"Failed to connect to {self.host}:{self.port}: banner read failed"
                 )
 
-            # If we have retries remaining, sleep with exponential backoff (capped at 60s)
+            # Sleep with exponential backoff (capped at 60s) if retries remain
             if attempt < self.retries:
                 delay = min(self.retry_delay * (2**attempt), 60.0)
                 await asyncio.sleep(delay)
